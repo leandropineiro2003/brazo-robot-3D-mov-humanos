@@ -86,7 +86,11 @@
     const metalMaterial = new THREE.MeshStandardMaterial({ 
         color: 0x888888, metalness: 0.8, roughness: 0.2 
     });
-
+    
+    const handsMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0xf2ba16, metalness: 0.8, roughness: 0.2 
+    });
+    
     const gridHelper = new THREE.GridHelper(10, 20, 0x444444, 0x222222);
     gridHelper.position.y = -2; // Colócala en la base de la columna
     scene.add(gridHelper);
@@ -126,13 +130,13 @@
     codoPivot.add(munecaPivot);
 
     const manoGeo = new THREE.SphereGeometry(0.15, 16, 16);
-    const mano = new THREE.Mesh(manoGeo, metalMaterial);
+    const mano = new THREE.Mesh(manoGeo, handsMaterial);
     munecaPivot.add(mano);
 
     // 4. Pinza (Dos dedos)
     const dedoGeo = new THREE.BoxGeometry(0.05, 0.4, 0.1);
-    const dedoL = new THREE.Mesh(dedoGeo, metalMaterial);
-    const dedoR = new THREE.Mesh(dedoGeo, metalMaterial);
+    const dedoL = new THREE.Mesh(dedoGeo, handsMaterial);
+    const dedoR = new THREE.Mesh(dedoGeo, handsMaterial);
     dedoL.position.set(-0.1, -0.3, 0);
     dedoR.position.set(0.1, -0.3, 0);
     munecaPivot.add(dedoL, dedoR);

@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Simulador de Brazo Robótico 3D</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: sans-serif; background-color: #1a1a1a; color: white; }
+        canvas { display: block; }
+        #ui-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px;
+            border-radius: 8px;
+            max-height: 90vh;
+            overflow-y: auto;
+            width: 250px;
+            border: 1px solid #444;
+        }
+        .control-group { margin-bottom: 15px; border-bottom: 1px solid #333; padding-bottom: 10px; }
+        label { display: block; font-size: 12px; margin-bottom: 5px; color: #aaa; }
+        input[type="range"] { width: 100%; margin-bottom: 5px; }
+        .value-display { font-weight: bold; color: #00d4ff; float: right; }
+        h2 { font-size: 16px; margin-top: 0; color: #00d4ff; text-transform: uppercase; }
+    </style>
+</head>
+<body>
+
+<div id="ui-container">
+    <h2>Control del Brazo</h2>
+    
+    <div class="control-group">
+        <label>Hombro (Giro) <span class="value-display" id="val-hombroGiro">0</span></label>
+        <input type="range" id="hombroGiro" min="-90" max="90" value="0">
+        <label>Hombro (Elevación) <span class="value-display" id="val-hombroElev">0</span></label>
+        <input type="range" id="hombroElev" min="-40" max="160" value="0">
+    </div>
+
+    <div class="control-group">
+        <label>Codo (Flexión) <span class="value-display" id="val-codo">0</span></label>
+        <input type="range" id="codo" min="0" max="145" value="0">
+    </div>
+
+    <div class="control-group">
+        <label>Muñeca (Giro) <span class="value-display" id="val-munecaGiro">0</span></label>
+        <input type="range" id="munecaGiro" min="-90" max="90" value="0">
+        <label>Muñeca (Flexión) <span class="value-display" id="val-munecaFlex">0</span></label>
+        <input type="range" id="munecaFlex" min="-70" max="70" value="0">
+    </div>
+
+    <div class="control-group">
+        <label>Pinza <span class="value-display" id="val-pinza">0</span></label>
+        <input type="range" id="pinza" min="0" max="0.5" step="0.01" value="0.2">
+    </div>
+
+    <div class="control-group" style="border:none">
+        <label>Velocidad de Movimiento <span class="value-display" id="val-speed">0.05</span></label>
+        <input type="range" id="speed" min="0.01" max="0.2" step="0.01" value="0.05">
+    </div>
+</div>
+
+<script type="importmap">
+    { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+    import * as THREE from 'three';
+
+    // --- CONFIGURACIÓN ESCENA ---
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x111111);
+    const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // Luces
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+    scene.add(ambientLight);
+    const pointLight = new THREE.PointLight(0xffffff, 1);
+    pointLight.position.set(5, 5, 5);
+    scene.add(pointLight);
+
+    // Material Metálico
+    const metalMaterial = new THREE.MeshStandardMaterial({ 
+        color: 0x888888, metalness: 0.8, roughness: 0.2 
+    });
+
+    // --- CONSTRUCCIÓN DEL ROBOT ---
+    
+    // 1. Columna (Cuerpo)
+    const columnaGeo = new THREE.CylinderGeometry(0.3, 0.3, 4, 32);
+    const columna = new THREE.Mesh(columnaGeo, new THREE.MeshStandardMaterial({color: 0x333333}));
+    scene.add(columna);
+
+    // Contenedores (Pivot Points)
+    const hombroPivot = new THREE.Group();
+    hombroPivot.position.set(0, 1.5, 0);
+    scene.add(hombroPivot);
+
+    // Brazo Superior
+    const brazoSupGeo = new THREE.CylinderGeometry(0.15, 0.15, 1.5, 32);
+    const brazoSup = new THREE.Mesh(brazoSupGeo, metalMaterial);
+    brazoSup.position.y = -0.75; // Bajar para que el pivote esté en el extremo
+    hombroPivot.add(brazoSup);
+
+    // 2. Codo
+    const codoPivot = new THREE.Group();
+    codoPivot.position.y = -1.5;
+    hombroPivot.add(codoPivot);
+
+    // Antebrazo
+    const antebrazoGeo = new THREE.CylinderGeometry(0.12, 0.12, 1.3, 32);
+    const antebrazo = new THREE.Mesh(antebrazoGeo, metalMaterial);
+    antebrazo.position.y = -0.65;
+    codoPivot.add(antebrazo);
+
+    // 3. Muñeca
+    const munecaPivot = new THREE.Group();
+    munecaPivot.position.y = -1.3;
+    codoPivot.add(munecaPivot);
+
+    const manoGeo = new THREE.SphereGeometry(0.15, 16, 16);
+    const mano = new THREE.Mesh(manoGeo, metalMaterial);
+    munecaPivot.add(mano);
+
+    // 4. Pinza (Dos dedos)
+    const dedoGeo = new THREE.BoxGeometry(0.05, 0.4, 0.1);
+    const dedoL = new THREE.Mesh(dedoGeo, metalMaterial);
+    const dedoR = new THREE.Mesh(dedoGeo, metalMaterial);
+    dedoL.position.set(-0.1, -0.3, 0);
+    dedoR.position.set(0.1, -0.3, 0);
+    munecaPivot.add(dedoL, dedoR);
+
+    camera.position.set(3, 0, 5);
+    camera.lookAt(0, 0, 0);
+
+    // --- LÓGICA DE MOVIMIENTO ---
+    const targets = {
+        hombroGiro: 0, hombroElev: 0, codo: 0,
+        munecaGiro: 0, munecaFlex: 0, pinza: 0.1
+    };
+
+    // Listeners para Inputs
+    const setupInput = (id, targetKey) => {
+        const input = document.getElementById(id);
+        const display = document.getElementById('val-' + id);
+        input.addEventListener('input', (e) => {
+            targets[targetKey] = parseFloat(e.target.value);
+            display.innerText = e.target.value;
+        });
+    };
+
+    setupInput('hombroGiro', 'hombroGiro');
+    setupInput('hombroElev', 'hombroElev');
+    setupInput('codo', 'codo');
+    setupInput('munecaGiro', 'munecaGiro');
+    setupInput('munecaFlex', 'munecaFlex');
+    setupInput('pinza', 'pinza');
+    
+    const speedInput = document.getElementById('speed');
+    const speedDisplay = document.getElementById('val-speed');
+    speedInput.addEventListener('input', (e) => speedDisplay.innerText = e.target.value);
+
+    // Función de interpolación (Suavizado)
+    function lerp(start, end, amt) {
+        return (1 - amt) * start + amt * end;
+    }
+
+    // --- BUCLE DE ANIMACIÓN ---
+    function animate() {
+        requestAnimationFrame(animate);
+        
+        const lerpVal = parseFloat(speedInput.value);
+
+        // Aplicar rotaciones convirtiendo grados a radianes
+        hombroPivot.rotation.y = lerp(hombroPivot.rotation.y, THREE.MathUtils.degToRad(targets.hombroGiro), lerpVal);
+        hombroPivot.rotation.z = lerp(hombroPivot.rotation.z, THREE.MathUtils.degToRad(targets.hombroElev), lerpVal);
+        
+        codoPivot.rotation.z = lerp(codoPivot.rotation.z, THREE.MathUtils.degToRad(targets.codo), lerpVal);
+        
+        munecaPivot.rotation.y = lerp(munecaPivot.rotation.y, THREE.MathUtils.degToRad(targets.munecaGiro), lerpVal);
+        munecaPivot.rotation.x = lerp(munecaPivot.rotation.x, THREE.MathUtils.degToRad(targets.munecaFlex), lerpVal);
+
+        // Movimiento de pinza
+        dedoL.position.x = lerp(dedoL.position.x, -targets.pinza, lerpVal);
+        dedoR.position.x = lerp(dedoR.position.x, targets.pinza, lerpVal);
+
+        renderer.render(scene, camera);
+    }
+
+    // Ajuste de ventana
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    animate();
+</script>
+</body>
+</html>
